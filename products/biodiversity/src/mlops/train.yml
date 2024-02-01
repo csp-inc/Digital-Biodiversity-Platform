@@ -1,0 +1,47 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: train_lgbm
+display_name: TrainLGBM
+version: 1
+type: command
+inputs:
+  input_path:
+    type: uri_folder
+  parameters_path:
+    type: uri_file
+  train_fraction:
+    type: number
+  random_seed:
+    type: integer
+  number_of_folds:
+    type: integer
+  maximum_evaluations:
+    type: integer
+  hyperparameter_algorithm:
+    type: string
+  correlation_id:
+    type: string
+  verbose:
+    type: number
+outputs:
+  best_parameters_path:
+    type: uri_folder
+  scoring_data_path:
+    type: uri_folder
+code: ./../../../
+environment: azureml:AzureML-sklearn-0.24-ubuntu18.04-py37-cpu@latest
+command: >-
+  PYTHONPATH=common/src:biodiversity/src python -m biodiversity.src.mlops.train_src.train
+  --input_path ${{inputs.input_path}}
+  --parameters_path ${{inputs.parameters_path}}
+  --train_fraction ${{inputs.train_fraction}}
+  --random_seed ${{inputs.random_seed}}
+  --number_of_folds ${{inputs.number_of_folds}}
+  --maximum_evaluations ${{inputs.maximum_evaluations}}
+  --hyperparameter_algorithm ${{inputs.hyperparameter_algorithm}}
+  --correlation_id ${{inputs.correlation_id}}
+  --verbose ${{inputs.verbose}}
+  --best_parameters_path ${{outputs.best_parameters_path}}
+  --scoring_data_path ${{outputs.scoring_data_path}}

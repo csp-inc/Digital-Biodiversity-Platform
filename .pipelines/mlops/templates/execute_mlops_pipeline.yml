@@ -1,0 +1,73 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+steps:
+  - task: AzureCLI@2
+    displayName: Execute Azure ML pipeline job
+    continueOnError: false
+    env:
+      {
+        APPLICATIONINSIGHTS_CONNECTION_STRING: "$(APPLICATIONINSIGHTS-CONNECTION-STRING)",
+      }
+    inputs:
+      azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+      scriptType: bash
+      workingDirectory: $(System.DefaultWorkingDirectory)
+      scriptLocation: inlineScript
+      inlineScript: |
+        source $(Build.SourcesDirectory)/python-path.env; export PYTHONPATH
+        echo "The build reference for the pipeline is $(Build.BuildId)."
+
+        if [[ ${{parameters.exec_environment}} == 'BUILD' ]]; then
+          python mlops/biodiversity/src/mlops_pipeline.py \
+            --subscription_id $(core_subscription_id) \
+            --resource_group_name $(core_resource_group_name) \
+            --workspace_name $(core_machine_learning_workspace_name) \
+            --cluster_name $(core_ml_compute_cluster_training_name) \
+            --build_reference $(Build.BuildId) \
+            --deploy_environment ${{parameters.exec_environment}} \
+            --wait_for_completion "True" \
+            --pipeline_pat ${{parameters.PIPELINE_PAT}} \
+            --register_pipeline_definition_number $(REGISTER_PIPELINE_ID) \
+            --register_pipeline_version_number $(REGISTER_PIPELINE_REVISION) \
+            --org_name $(ORG_NAME)  \
+            --project_name $(System.TeamProjectId) \
+            --azdo_pipeline_rest_version $(AZDO_PIPELINE_REST_VERSION)\
+            --environment_name $(MLOPS_ENVIRONMENT_NAME) \
+            --branch_name $(Build.SourceBranch) \
+            --site_path "/datastores/datablobstore/paths" \
+            --site_name "cherrypt" \
+            --species_name "branta-hutchinsii" \
+            --number_of_folds 2  \
+            --maximum_evaluations 1  \
+            --correlation_id $(correlation_id)
+        else
+          species=($(tail -n +2 $(Build.SourcesDirectory)/mlops/biodiversity/config/candidate_species.csv | tr " " "-" | awk -F " ", '{print $1}'))
+          i=0
+          while [ $i -lt ${#species[@]} ]
+          do
+            python mlops/biodiversity/src/mlops_pipeline.py \
+              --subscription_id $(core_subscription_id) \
+              --resource_group_name $(core_resource_group_name) \
+              --workspace_name $(core_machine_learning_workspace_name) \
+              --cluster_name $(core_ml_compute_cluster_training_name) \
+              --build_reference $(Build.BuildId) \
+              --deploy_environment ${{parameters.exec_environment}} \
+              --wait_for_completion "False" \
+              --pipeline_pat ${{parameters.PIPELINE_PAT}} \
+              --register_pipeline_definition_number $(REGISTER_PIPELINE_ID) \
+              --register_pipeline_version_number $(REGISTER_PIPELINE_REVISION) \
+              --org_name $(ORG_NAME)  \
+              --project_name $(System.TeamProjectId) \
+              --azdo_pipeline_rest_version $(AZDO_PIPELINE_REST_VERSION)\
+              --environment_name $(MLOPS_ENVIRONMENT_NAME) \
+              --branch_name $(Build.SourceBranch) \
+              --site_path "/datastores/datablobstore/paths" \
+              --site_name "cherrypt" \
+              --species_name ${species[$i]} \
+              --number_of_folds ${{parameters.number_of_folds}}  \
+              --maximum_evaluations ${{parameters.maximum_evaluations}}  \
+              --correlation_id $(correlation_id)
+            i=$(( $i+1 ))
+          done
+        fi

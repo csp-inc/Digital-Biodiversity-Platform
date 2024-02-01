@@ -1,0 +1,29 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: train_to_deploy
+display_name: TrainToDeploy
+version: 1
+type: command
+inputs:
+  prep_data_path:
+    type: uri_folder
+  best_parameters_path:
+    type: uri_folder
+  correlation_id:
+    type: string
+outputs:
+  model_output_path:
+    type: uri_folder
+  model_metadata:
+    type: uri_file
+code: ./../../../
+environment: azureml:AzureML-sklearn-0.24-ubuntu18.04-py37-cpu@latest
+command: >-
+  PYTHONPATH=common/src:biodiversity/src python -m biodiversity.src.mlops.train_to_deploy_src.train_to_deploy
+  --prep_data_path ${{inputs.prep_data_path}}
+  --best_parameters_path ${{inputs.best_parameters_path}}
+  --correlation_id ${{inputs.correlation_id}}
+  --model_output_path ${{outputs.model_output_path}}
+  --model_metadata ${{outputs.model_metadata}}

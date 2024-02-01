@@ -1,0 +1,22 @@
+repos:
+  # Removing pyright until we can fix the external package issues.
+  # - repo: https://github.com/RobertCraigie/pyright-python
+  #   rev: v1.1.279
+  #   hooks:
+  #   - id: pyright
+  - repo: https://github.com/psf/black
+    rev: 22.10.0
+    hooks:
+    - id: black
+  - repo: https://github.com/PyCQA/flake8
+    rev: 3.9.2
+    hooks:
+    - id: flake8
+      additional_dependencies: ['pep8-naming', 'flake8-print']
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+    -   id: detect-secrets
+        # Following secret is a hash in a Jupyter notebook. Temp solution, needs to be fixed properly.
+        args: ['--baseline', '.secrets.baseline', '--exclude-secrets', '949777d72b0d2535278d3dc13498b2535136f6dfe0678499012e853ee9abcab1']
+

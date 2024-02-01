@@ -1,0 +1,39 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+type: command
+
+description: Features component
+display_name: features-component
+
+inputs:
+  feature:
+    type: string
+  gbif_subsampled:
+    type: uri_file
+  keyvault_name:
+    type: string
+  args:
+    type: string
+
+outputs:
+  features:
+    type: uri_folder
+
+# The code path is relative to the location of this YAML file; it points to the `products` directory
+code: ../../..
+
+# The image/Conda environment to use
+environment: azureml:preparation@latest
+
+# Define the size of the MPI cluster
+distribution:
+  type: mpi
+  process_count_per_instance: 8
+resources:
+  instance_count: 10
+
+# The command to execute
+command: >-
+  export PYTHONPATH=common/src:biodiversity/src; python biodiversity/dataprep/src/feature_aggregation.py --key_vault_name ${{inputs.keyvault_name}} --feature ${{inputs.feature}} --gbif_file ${{inputs.gbif_subsampled}} --output_path ${{outputs.features}} ${{inputs.args}}

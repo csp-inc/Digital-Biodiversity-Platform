@@ -1,0 +1,104 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineJob.schema.json
+type: pipeline
+
+description: Inference pipeline
+
+display_name: inference-pipeline
+experiment_name: inference-pipeline
+
+settings:
+  default_compute: azureml:clu-inference-8fpz
+  default_datastore: azureml:datablobstore
+
+jobs:
+  mergedata:
+    type: command
+
+    inputs:
+      cherry_pt_segments:
+        type: uri_file
+        mode: ro_mount
+        path: "input/real/path"
+      gold_table_path:
+        type: uri_file
+        mode: ro_mount
+        path: "input/real/path"
+      key_vault_name: "name-of-key-vault"
+
+    # Outputs
+    # You can leave the object empty, in which case by default the output will be of type uri_folder
+    # and Azure ML will system-generate an output location for the output based on the following
+    # templatized path: {settings.datastore}/azureml/{job-name}/{output-name}/.
+    outputs:
+      batch_input:
+      merged_df:
+
+    # The code path is relative to the location of this YAML file; it points to the `products` directory
+    code: ../../..
+
+    # The image/Conda environment to use
+    environment: azureml:mlops@latest
+
+    # The command to execute
+    command: >-
+      PYTHONPATH=common/src:biodiversity/src
+      python biodiversity/inference/src/merge_data.py
+      --cherry_pt_segments ${{inputs.cherry_pt_segments}}
+      --gold_table_path ${{inputs.gold_table_path}}
+      --batch_input_path ${{outputs.batch_input}}
+      --merged_df_path ${{outputs.merged_df}}
+      --key_vault_name ${{inputs.key_vault_name}}
+
+  inference:
+    type: command
+
+    # Inputs
+    inputs:
+      site_name: "test"
+      species_list_csv:
+        type: uri_file
+        mode: ro_mount
+        path: "input/real/path"
+      batch_input_path:
+        type: uri_folder
+        mode: direct
+        path: ${{parent.jobs.mergedata.outputs.batch_input}}
+      merged_df_path: ${{parent.jobs.mergedata.outputs.merged_df}}
+      max_wait_time: 3600
+      subscription_id: "subscription-id"
+      resource_group: "resource-group-name"
+      workspace: "workspace-name"
+      key_vault_name: "name-of-key-vault"
+      uid: "uid"
+
+    # Outputs
+    outputs:
+      inference_results:
+        type: uri_file
+        mode: rw_mount
+        path: "input/real/path"
+
+    # The code path is relative to the location of this YAML file; it points to the `products` directory
+    code: ../../..
+
+    # The image/Conda environment to use
+    environment: azureml:mlops@latest
+
+    # The command to execute
+    command: >-
+      PYTHONPATH=common/src:biodiversity/src
+      python biodiversity/inference/src/perform_inference.py
+      --site_name ${{inputs.site_name}}
+      --species_list_csv ${{inputs.species_list_csv}}
+      --batch_input_path ${{inputs.batch_input_path}}
+      --merged_df_path ${{inputs.merged_df_path}}
+      --output_path ${{outputs.inference_results}}
+      --max_wait_time ${{inputs.max_wait_time}}
+      --subscription_id ${{inputs.subscription_id}}
+      --resource_group ${{inputs.resource_group}}
+      --workspace ${{inputs.workspace}}
+      --key_vault_name ${{inputs.key_vault_name}}
+      --uid ${{inputs.uid}}

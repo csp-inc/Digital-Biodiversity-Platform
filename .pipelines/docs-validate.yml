@@ -1,0 +1,20 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- script: |
+    # Lint all markdown files.
+    npm install markdownlint-cli -g
+    markdownlint '$(Build.SourcesDirectory)/**/*.md' --ignore node_modules
+  displayName: 'run markdownlint'
+
+- script: |
+    # Extracts links from markdown texts and checks whether each link is alive (200 OK) or dead.
+    npm install markdown-link-check -g
+    find $(Build.SourcesDirectory) -name '*.md' -print0 | xargs -0 -n1 markdown-link-check -c $(Build.SourcesDirectory)/.markdownlinkcheck.json
+  displayName: 'run markdown-link-check'

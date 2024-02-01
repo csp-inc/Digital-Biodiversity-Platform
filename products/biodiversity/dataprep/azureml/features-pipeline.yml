@@ -1,0 +1,151 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineJob.schema.json
+type: pipeline
+
+description: Features pipeline
+display_name: features-pipeline
+
+experiment_name: features
+
+settings:
+  default_compute: azureml:clu-data-preparation-8fpz
+  continue_on_step_failure: True
+  force_rerun: True
+
+inputs:
+  gbif_subsampled:
+    type: uri_file
+    path: azureml://datastores/datablobstore/paths/cherrypt/training/gbif/gbif_subsampled.csv
+  keyvault_name:
+    type: string
+  # Optional additional args to pass to the script; default empty for training, use --inference for inference
+  args: "$PLACEHOLDER"
+
+outputs:
+  feature_landsat8:
+    type: uri_folder
+    mode: rw_mount
+    path: azureml://datastores/datablobstore/paths/cherrypt/training/features
+  feature_indices:
+    type: uri_folder
+    mode: rw_mount
+    path: azureml://datastores/datablobstore/paths/cherrypt/training/features
+  feature_water:
+    type: uri_folder
+    mode: rw_mount
+    path: azureml://datastores/datablobstore/paths/cherrypt/training/features
+  feature_nasadem:
+    type: uri_folder
+    mode: rw_mount
+    path: azureml://datastores/datablobstore/paths/cherrypt/training/features
+  feature_gnatsgo:
+    type: uri_folder
+    mode: rw_mount
+    path: azureml://datastores/datablobstore/paths/cherrypt/training/features
+  feature_terraclimate:
+    type: uri_folder
+    mode: rw_mount
+    path: azureml://datastores/datablobstore/paths/cherrypt/training/features
+  gold_table:
+    type: uri_file
+    path: azureml://datastores/datablobstore/paths/cherrypt/training/features_gold_data_table.csv
+
+jobs:
+  feature_landsat8:
+    type: command
+    component: feature-component.yml
+    inputs:
+      feature: "landsat8"
+      gbif_subsampled: ${{parent.inputs.gbif_subsampled}}
+      args: ${{parent.inputs.args}}
+      keyvault_name: ${{parent.inputs.keyvault_name}}
+    outputs:
+      features: ${{parent.outputs.feature_landsat8}}
+
+  feature_indices:
+    type: command
+    component: feature-component.yml
+    inputs:
+      feature: "indices"
+      gbif_subsampled: ${{parent.inputs.gbif_subsampled}}
+      args: ${{parent.inputs.args}}
+      keyvault_name: ${{parent.inputs.keyvault_name}}
+    outputs:
+      features: ${{parent.outputs.feature_indices}}
+
+  feature_water:
+    type: command
+    component: feature-component.yml
+    inputs:
+      feature: "water"
+      gbif_subsampled: ${{parent.inputs.gbif_subsampled}}
+      args: ${{parent.inputs.args}}
+      keyvault_name: ${{parent.inputs.keyvault_name}}
+    outputs:
+      features: ${{parent.outputs.feature_water}}
+
+  feature_nasadem:
+    type: command
+    component: feature-component.yml
+    inputs:
+      feature: "nasadem"
+      gbif_subsampled: ${{parent.inputs.gbif_subsampled}}
+      args: ${{parent.inputs.args}}
+      keyvault_name: ${{parent.inputs.keyvault_name}}
+    outputs:
+      features: ${{parent.outputs.feature_nasadem}}
+
+  feature_gnatsgo:
+    type: command
+    component: feature-component.yml
+    inputs:
+      feature: "gnatsgo"
+      gbif_subsampled: ${{parent.inputs.gbif_subsampled}}
+      args: ${{parent.inputs.args}}
+      keyvault_name: ${{parent.inputs.keyvault_name}}
+    outputs:
+      features: ${{parent.outputs.feature_gnatsgo}}
+
+  feature_terraclimate:
+    type: command
+    component: feature-component.yml
+    inputs:
+      feature: "terraclimate"
+      gbif_subsampled: ${{parent.inputs.gbif_subsampled}}
+      args: ${{parent.inputs.args}}
+      keyvault_name: ${{parent.inputs.keyvault_name}}
+    outputs:
+      features: ${{parent.outputs.feature_terraclimate}}
+
+  gold_table:
+    type: command
+    inputs:
+      keyvault_name: ${{parent.inputs.keyvault_name}}
+      feature_landsat8:
+        type: uri_folder
+        path: ${{parent.jobs.feature_landsat8.outputs.features}}
+      feature_indices:
+        type: uri_folder
+        path: ${{parent.jobs.feature_indices.outputs.features}}
+      feature_water:
+        type: uri_folder
+        path: ${{parent.jobs.feature_water.outputs.features}}
+      feature_nasadem:
+        type: uri_folder
+        path: ${{parent.jobs.feature_nasadem.outputs.features}}
+      feature_gnatsgo:
+        type: uri_folder
+        path: ${{parent.jobs.feature_gnatsgo.outputs.features}}
+      feature_terraclimate:
+        type: uri_folder
+        path: ${{parent.jobs.feature_terraclimate.outputs.features}}
+    outputs:
+      gold_table:
+        type: uri_file
+        path: ${{parent.outputs.gold_table}}
+    code: ../../..
+    environment: azureml:preparation@latest
+    command: >-
+      PYTHONPATH=common/src:biodiversity/src python biodiversity/dataprep/src/create_gold_table.py --key_vault_name ${{inputs.keyvault_name}} --gbif_feature_dir ${{inputs.feature_landsat8}} --csv_output_path ${{outputs.gold_table}} --drop_duplicates True --fill_value 0

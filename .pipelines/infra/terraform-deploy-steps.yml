@@ -1,0 +1,142 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+parameters:
+- name: environment
+  type: string
+  values:
+  - development
+  - release
+- name: location
+  type: string
+- name: resourceGroupName
+  type: string
+- name: storageAccountName
+  type: string
+- name: storageContainerName
+  type: string
+- name: serviceConnection
+  type: string
+
+jobs:
+- job: checkinfra
+  displayName: 'Check changes on infrastructure (${{parameters.environment}})'
+  steps:
+  - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@0
+    inputs:
+      terraformVersion: 'latest'
+
+  - script: |
+      terraform -version
+    displayName: 'Display terraform version'
+
+  - task: AzureCLI@2
+    displayName: 'Check backend resource requirements to manage terraform states'
+    inputs:
+      azureSubscription: ${{parameters.serviceConnection}}
+      scriptType: bash
+      scriptLocation: scriptPath
+      arguments: ${{parameters.location}} ${{parameters.resourceGroupName}} ${{parameters.storageAccountName}} ${{parameters.storageContainerName}}
+      scriptPath: $(scriptsDirectory)/state-requirements.sh
+
+  - task: AzureCLI@2
+    displayName: 'Terraform initialization (${{parameters.environment}})'
+    inputs:
+      azureSubscription: ${{parameters.serviceConnection}}
+      workingDirectory: $(terraformDirectory)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        terraform init -upgrade \
+          -backend-config="storage_account_name=${{parameters.storageAccountName}}" \
+          -backend-config="container_name=${{parameters.storageContainerName}}" \
+          -backend-config="access_key=$(az storage account keys list --resource-group ${{parameters.resourceGroupName}} --account-name ${{parameters.storageAccountName}} --query [0].value -o tsv)" \
+          -backend-config="key=${{parameters.environment}}.tfstate"
+
+  - task: AzureCLI@2
+    displayName: 'Terraform plan (${{parameters.environment}})'
+    inputs:
+      azureSubscription: ${{parameters.serviceConnection}}
+      workingDirectory: $(terraformDirectory)
+      addSpnToEnvironment: true
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        export ARM_TENANT_ID=$tenantId # get tenant id from environment variables
+        export ARM_SUBSCRIPTION_ID=$(az account show --query 'id' --output tsv)
+        export ARM_CLIENT_ID=$servicePrincipalId # get client id from environment variables
+        export ARM_CLIENT_SECRET=$servicePrincipalKey
+
+        terraform plan -var-file="./environments/${{parameters.environment}}.tfvars" -out=$(Build.ArtifactStagingDirectory)/$(Build.BuildId)
+
+  - publish: '$(Build.ArtifactStagingDirectory)'
+    displayName: 'Publish plan'
+    artifact: ${{parameters.environment}}
+
+- job: waitForValidation
+  displayName: 'Wait for manual validation (${{parameters.environment}})'
+  dependsOn: checkinfra
+  pool: server
+  timeoutInMinutes: 1440
+  steps:
+  - task: ManualValidation@0
+    timeoutInMinutes: 120
+    inputs:
+        instructions: 'Please validate the terraform plan.'
+        onTimeout: 'reject'
+
+- job: deployinfra
+  displayName: 'Deploy changes on infrastructure (${{parameters.environment}})'
+  dependsOn: waitForValidation
+  steps:
+  - download: current
+    displayName: 'Download plan'
+    artifact: ${{parameters.environment}}
+
+  - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@0
+    inputs:
+      terraformVersion: 'latest'
+
+  - script: |
+      terraform -version
+    displayName: 'Display terraform version'
+
+  - task: AzureCLI@2
+    displayName: 'Terraform initialization (${{parameters.environment}})'
+    inputs:
+      azureSubscription: ${{parameters.serviceConnection}}
+      workingDirectory: $(terraformDirectory)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        terraform init -upgrade \
+          -backend-config="storage_account_name=${{parameters.storageAccountName}}" \
+          -backend-config="container_name=${{parameters.storageContainerName}}" \
+          -backend-config="access_key=$(az storage account keys list --resource-group ${{parameters.resourceGroupName}} --account-name ${{parameters.storageAccountName}} --query [0].value -o tsv)" \
+          -backend-config="key=${{parameters.environment}}.tfstate"
+
+  - task: AzureCLI@2
+    displayName: 'Terraform apply (${{parameters.environment}})'
+    inputs:
+      azureSubscription: ${{parameters.serviceConnection}}
+      workingDirectory: $(terraformDirectory)
+      addSpnToEnvironment: true
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        export ARM_TENANT_ID=$tenantId # get tenant id from environment variables
+        export ARM_SUBSCRIPTION_ID=$(az account show --query 'id' --output tsv)
+        export ARM_CLIENT_ID=$servicePrincipalId # get client id from environment variables
+        export ARM_CLIENT_SECRET=$servicePrincipalKey
+
+        terraform apply -auto-approve $(Pipeline.Workspace)/${{parameters.environment}}/$(Build.BuildId)
+
+  - task: Bash@3
+    displayName: 'Update variable group using terraform outputs'
+    inputs:
+      targetType: filePath
+      arguments: $(System.TeamFoundationCollectionUri) $(System.TeamProjectId) "EBIO-PLATFORM-DEV-VG"
+      workingDirectory: $(terraformDirectory)
+      filePath: $(scriptsDirectory)/update-variablegroup.sh
+    env:
+      AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)

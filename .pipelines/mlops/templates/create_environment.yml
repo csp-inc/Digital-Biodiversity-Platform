@@ -1,0 +1,24 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+steps:
+  - task: AzureCLI@2
+    displayName: Register Azure ML environment (conda)
+    continueOnError: false
+    name: "createEnvironment"
+    inputs:
+      azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+      scriptType: bash
+      workingDirectory: $(System.DefaultWorkingDirectory)
+      scriptLocation: inlineScript
+      inlineScript: |
+          python -m mlops.common.get_environment \
+          --subscription_id $(core_subscription_id) \
+          --resource_group_name $(core_resource_group_name) \
+          --workspace_name $(core_machine_learning_workspace_name) \
+          --env_base_image_name $(ENV_BASE_IMAGE_NAME) \
+          --conda_path $(MLOPS_CONDA_PATH) \
+          --environment_name $(MLOPS_ENVIRONMENT_NAME) \
+          --environment_version $(Build.BuildId) \
+          --description "this describes the environment"
+

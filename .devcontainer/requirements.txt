@@ -1,0 +1,15 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+black==23.12.1
+detect-secrets==1.4.0
+flake8==7.0.0
+flake8-print==5.0.0
+parameterized==0.9.0
+pep8-naming==0.13.3
+pre-commit==3.0.2
+pyahocorasick==2.0.0
+pyright==1.1.345
+pytest==7.4.4
+pytest-cov==4.1.0
+setuptools==69.0.3

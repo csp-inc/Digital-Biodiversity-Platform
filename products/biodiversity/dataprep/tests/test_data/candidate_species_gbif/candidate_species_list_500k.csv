@@ -1,0 +1,17 @@
+species,obs,quantilerank,mean_distance,quantilerank_dist,candidate
+Cepphus columba,1108,1,59937.049743932366,0,0
+Aythya affinis,592,0,69435.96028853625,0,1
+Branta canadensis,3970,3,79689.08987953664,2,2
+Patagioenas fasciata,894,0,71912.41733033644,1,3
+Sphyrapicus ruber,1073,1,78069.09141384572,2,4
+Zonotrichia atricapilla,2134,2,75155.86361190783,1,5
+Larus canus,1434,2,68586.24574823487,0,6
+Regulus satrapa,2434,3,72013.44440101204,1,7
+Tachycineta thalassina,2324,2,88866.19317053712,3,8
+Branta hutchinsii,659,0,77175.89441210417,2,9
+Buteo jamaicensis,2917,3,87278.24137299358,3,10
+Haemorhous mexicanus,4276,3,69123.18596933206,0,11
+Empidonax traillii,633,0,90205.4785148553,3,12
+Hirundo rustica,2155,2,83588.51187078483,2,13
+Dryocopus pileatus,1281,1,74472.56438083512,1,14
+Leuconotopicus villosus,1042,1,88433.03411398173,3,15

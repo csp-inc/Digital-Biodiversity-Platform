@@ -1,0 +1,117 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+parameters:
+  - name: runid
+    type: string
+  - name: runuri
+    type: string
+  - name: accuracy
+    type: string
+  - name: roc_auc
+    type: string
+  - name: experiment_base_name
+    type: string
+  - name: trigger_buildid
+    type: string
+
+variables:
+  - group: EBIO-STATE-VG
+  - group: MLOPS-CORE-VG
+  - group: EBIO-PLATFORM-DEV-VG
+
+jobs:
+  - job: ApprovalRequired
+    displayName: "Wait for manual validation (${{parameters.experiment_base_name}})"
+    pool: server
+    timeoutInMinutes: 1440
+    steps:
+      - task: ManualValidation@0
+        timeoutInMinutes: 480
+        inputs:
+          instructions: "Approving will register the model in the workspace"
+          onTimeout: "reject"
+
+  - job: RegisterModelAndBatchDeployment
+    dependsOn: ApprovalRequired
+    steps:
+      - task: UsePythonVersion@0
+        displayName: "install python 3.8"
+        continueOnError: false
+        inputs:
+          versionSpec: "3.8"
+
+      - script: |
+          pip install -r $(Build.SourcesDirectory)/.devcontainer/requirements.txt
+          pip install -r $(Build.SourcesDirectory)/products/common/requirements.txt
+          pip install -r $(Build.SourcesDirectory)/products/biodiversity/requirements.txt
+        displayName: Install requirements
+
+      - task: PowerShell@2
+        displayName: "Generate correlation_id"
+        inputs:
+          targetType: "inline"
+          script: |
+            $new_correlation_id = New-Guid
+            Write-Host "##vso[task.setvariable variable=correlation_id;]$new_correlation_id"
+            Write-Output "Job correlation_id=$new_correlation_id"
+
+      - task: AzureKeyVault@2
+        continueOnError: false
+        inputs:
+          azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+          KeyVaultName: $(core_key_vault_name)
+          SecretsFilter: "*"
+          RunAsPreJob: false
+
+      - task: AzureCLI@2
+        displayName: Register the Model
+        env:
+          {
+            APPLICATIONINSIGHTS_CONNECTION_STRING: "$(APPLICATIONINSIGHTS-CONNECTION-STRING)",
+          }
+        continueOnError: false
+        inputs:
+          azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            source $(Build.SourcesDirectory)/python-path.env; export PYTHONPATH
+            python mlops/biodiversity/src/register_model.py \
+              --subscription_id $(core_subscription_id) \
+              --resource_group_name  $(core_resource_group_name) \
+              --workspace_name $(core_machine_learning_workspace_name)  \
+              --model_run_path ${{ parameters.runuri }}   \
+              --accuracy ${{ parameters.accuracy }} \
+              --roc_auc ${{ parameters.roc_auc }} \
+              --experiment_base_name ${{ parameters.experiment_base_name }} \
+              --trigger_buildid ${{ parameters.trigger_buildid }} \
+              --correlation_id $(correlation_id)
+
+      - task: AzureCLI@2
+        displayName: Batch Deployment
+        env:
+          {
+            APPLICATIONINSIGHTS_CONNECTION_STRING: "$(APPLICATIONINSIGHTS-CONNECTION-STRING)",
+          }
+        inputs:
+          azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            source $(Build.SourcesDirectory)/python-path.env; export PYTHONPATH
+            python mlops/biodiversity/src/batch_deployment.py \
+              --subscription_id $(core_subscription_id) \
+              --uid $(core_platform_uid) \
+              --resource_group_name  $(core_resource_group_name) \
+              --workspace_name $(core_machine_learning_workspace_name)  \
+              --cluster_name $(core_ml_compute_cluster_training_name) \
+              --env_base_image_name $(ENV_BASE_IMAGE_NAME) \
+              --conda_path $(MLOPS_CONDA_PATH) \
+              --experiment_base_name ${{ parameters.experiment_base_name }} \
+              --correlation_id $(correlation_id)

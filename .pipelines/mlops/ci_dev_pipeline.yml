@@ -1,0 +1,65 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+pr: none
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - .pipelines/mlops/*
+      - mlops/*
+      - products/biodiversity/src/mlops/*
+
+pool:
+  vmImage: ubuntu-latest
+
+parameters:
+  - name: exec_environment
+    displayName: Execution Environment
+    default: DEV
+    values:
+      - DEV
+      - BUILD
+
+variables:
+  - group: EBIO-STATE-VG
+  - group: MLOPS-CORE-VG
+  - group: EBIO-PLATFORM-DEV-VG
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: "3.8"
+
+  - script: |
+      pip install -r $(Build.SourcesDirectory)/.devcontainer/requirements.txt
+      pip install -r $(Build.SourcesDirectory)/products/common/requirements.txt
+      pip install -r $(Build.SourcesDirectory)/products/biodiversity/requirements.txt
+    displayName: Install requirements
+
+  - task: PowerShell@2
+    displayName: Generate correlation_id
+    inputs:
+      targetType: "inline"
+      script: |
+        $new_correlation_id = New-Guid
+        Write-Host "##vso[task.setvariable variable=correlation_id;]$new_correlation_id"
+        Write-Output "Job correlation_id=$new_correlation_id"
+
+  - task: AzureKeyVault@2
+    continueOnError: false
+    inputs:
+      azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+      KeyVaultName: $(core_key_vault_name)
+      SecretsFilter: "*"
+      RunAsPreJob: false
+
+  - template: templates/create_environment.yml
+  - template: templates/execute_mlops_pipeline.yml
+    parameters:
+      pipeline_pat: $(DEVOPS-PIPELINE-PAT)
+      exec_environment: ${{parameters.exec_environment}}
+      number_of_folds: 4
+      maximum_evaluations: 50

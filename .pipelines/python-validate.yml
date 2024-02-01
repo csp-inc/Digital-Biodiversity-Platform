@@ -1,0 +1,75 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - group: EBIO-STATE-VG
+  - group: MLOPS-CORE-VG
+  - group: EBIO-PLATFORM-DEV-VG
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: "3.8"
+
+  - script: |
+      pip install -r $(Build.SourcesDirectory)/.devcontainer/requirements.txt
+      pip install -r $(Build.SourcesDirectory)/products/common/requirements.txt
+      pip install -r $(Build.SourcesDirectory)/products/biodiversity/requirements.txt
+      npm install pyright -g
+    displayName: Install requirements
+
+  # - script: |
+  #     # Run pyright static code check on all python files
+  #     source $(Build.SourcesDirectory)/python-path.env; export PYTHONPATH
+  #     pyright '$(Build.SourcesDirectory)/products'
+  #   displayName: Run pyright
+
+  - script: |
+      flake8 $(Build.SourcesDirectory)/products
+    displayName: Run flake8
+
+  - script: |
+      black --check $(Build.SourcesDirectory)/products
+    displayName: Run black
+
+  - script: |
+      source $(Build.SourcesDirectory)/python-path.env; export PYTHONPATH
+      pytest --junitxml=./test-results.xml $(Build.SourcesDirectory)/products/biodiversity -m "not integration"
+    displayName: Run unit tests
+
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFiles: "**/test-*.xml"
+      testRunTitle: "Publish test results for Python $(python.version)"
+    displayName: Publish pytest results
+
+  - task: PowerShell@2
+    displayName: Generate correlation_id
+    inputs:
+      targetType: "inline"
+      script: |
+        $new_correlation_id = New-Guid
+        Write-Host "##vso[task.setvariable variable=correlation_id;]$new_correlation_id"
+        Write-Output "Job correlation_id=$new_correlation_id"
+
+  - task: AzureKeyVault@2
+    continueOnError: false
+    inputs:
+      azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+      KeyVaultName: $(core_key_vault_name)
+      SecretsFilter: "*"
+      RunAsPreJob: false
+
+  - template: mlops/templates/create_environment.yml
+  - template: mlops/templates/execute_mlops_pipeline.yml
+    parameters:
+      pipeline_pat: $(DEVOPS-PIPELINE-PAT)
+      exec_environment: "BUILD"
+      number_of_folds: 4
+      maximum_evaluations: 50

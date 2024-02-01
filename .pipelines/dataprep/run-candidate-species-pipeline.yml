@@ -1,0 +1,92 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+trigger: none
+
+pool:
+  vmImage: ubuntu-22.04
+
+variables:
+  - group: EBIO-STATE-VG
+  - group: MLOPS-CORE-VG
+  - group: EBIO-PLATFORM-DEV-VG
+
+parameters:
+  - name: gbif
+    displayName: Path to the GBIF observations file
+    type: string
+    default: "azureml://datastores/datablobstore/paths/cherrypt/training/gbif/gbif_subsampled_20230201.csv"
+  - name: candidate_species
+    displayName: Path of the candidate species table to read/create
+    type: string
+    default: "azureml://datastores/datablobstore/paths/cherrypt/configuration/candidate_species_list_500k.csv"
+  - name: species_output
+    displayName: Path to a folder where species tables will be created
+    type: string
+    default: "azureml://datastores/datablobstore/paths/cherrypt/training/species_20230201"
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: "3.8"
+
+  - script: |
+      pip install -r $(Build.SourcesDirectory)/products/biodiversity/requirements.txt
+    displayName: Install requirements
+
+  - task: AzureCLI@2
+    displayName: Install and configure AML CLI v2
+    inputs:
+      azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      workingDirectory: $(System.DefaultWorkingDirectory)
+      inlineScript: |
+        set -e # fail on error
+        az version
+        az extension add -n ml -y
+        az extension list
+        az configure --defaults group=$(core_resource_group_name) workspace=$(core_machine_learning_workspace_name)
+
+  - task: AzureCLI@2
+    displayName: Create or Update Azure ML environment (conda)
+    continueOnError: false
+    inputs:
+      azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      workingDirectory: $(System.DefaultWorkingDirectory)
+      inlineScript: |
+        python -m mlops.common.get_environment \
+          --subscription_id $(core_subscription_id) \
+          --resource_group_name $(core_resource_group_name) \
+          --workspace_name $(core_machine_learning_workspace_name) \
+          --env_base_image_name $(ENV_BASE_IMAGE_NAME) \
+          --conda_path $(PREPARATION_CONDA_PATH) \
+          --environment_name $(PREPARATION_ENVIRONMENT_NAME) \
+          --environment_version $(Build.BuildId) \
+          --description "this describes the environment"
+
+  - task: AzureCLI@2
+    displayName: Run Azure ML pipeline
+    inputs:
+      azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+      scriptType: bash
+      workingDirectory: $(System.DefaultWorkingDirectory)
+      scriptLocation: inlineScript
+      inlineScript: |
+        run_id=$(az ml job create -f products/biodiversity/dataprep/azureml/candidate-species-pipeline.yml \
+          --set settings.default_compute='azureml:$(core_ml_compute_cluster_data_preparation_name)' \
+          --set jobs.candidate_species.inputs.keyvault_name='$(core_key_vault_name)' \
+          --set jobs.candidate_species.inputs.gbif.path="${{ parameters.gbif }}" \
+          --set jobs.candidate_species.inputs.candidate_species_list.path="${{ parameters.candidate_species }}" \
+          --set jobs.candidate_species.outputs.species_gbif_output.path="${{ parameters.species_output }}" \
+          --query name -o tsv)
+
+        if [[ -z "$run_id" ]]
+        then
+          echo "Job creation failed"
+          exit 3
+        fi
+
+        az ml job show -n $run_id --web

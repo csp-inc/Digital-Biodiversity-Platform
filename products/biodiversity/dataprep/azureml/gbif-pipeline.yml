@@ -1,0 +1,49 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineJob.schema.json
+type: pipeline
+
+description: GBIF data preparation pipeline
+
+display_name: gbif-pipeline
+experiment_name: gbif-pipeline
+
+settings:
+  default_compute: azureml:clu-data-preparation-8fpz
+
+jobs:
+  gbif:
+    type: command
+
+    # Inputs
+    inputs:
+      us_eco_l3:
+        type: uri_file
+        path: azureml://datastores/datablobstore/paths/cherrypt/configuration/us_eco_l3.zip
+      filter: '{"key":"US_L3NAME","values":"[\"Puget Lowland\",\"North Cascades\"]","stateprovince":"Washington"}'
+      crs: "epsg:26910"
+
+    # Outputs
+    outputs:
+      gbif_subsampled:
+        type: uri_file
+        mode: rw_mount
+        path: azureml://datastores/datablobstore/paths/cherrypt/training/gbif/gbif_subsampled.csv
+
+    # The code path is relative to the location of this YAML file; it points to the `products` directory
+    code: ../../..
+
+    # The image/Conda environment to use
+    environment: azureml:preparation@latest
+
+    # Define the size of the MPI cluster
+    distribution:
+      type: mpi
+      process_count_per_instance: 8
+    resources:
+      instance_count: 10
+
+    # The command to execute
+    command: >-
+      PYTHONPATH=common/src:biodiversity/src python biodiversity/dataprep/src/preprocess_gbif.py --key_vault_name ${{inputs.keyvault_name}} --ecoregions_file_path ${{inputs.us_eco_l3}} --parameters_string '${{inputs.filter}}' --spatial_filter_projection_code  '${{inputs.crs}}' --output_file_path ${{outputs.gbif_subsampled}}

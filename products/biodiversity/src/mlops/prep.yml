@@ -1,0 +1,38 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: prepare_gbif_and_species_data
+display_name: PrepGbifAndSpeciesData
+version: 1
+type: command
+inputs:
+  raw_data_gbif_path:
+    type: uri_file
+  raw_data_species_path:
+    type: uri_folder
+  species_filename:
+    type: string
+  columns_to_drop:
+    type: string
+  drop_nans:
+    type: boolean
+  target_col_name:
+    type: string
+  correlation_id:
+    type: string
+outputs:
+  prep_data_path:
+    type: uri_folder
+code: ./../../../
+environment: azureml:AzureML-sklearn-0.24-ubuntu18.04-py37-cpu@latest
+command: >-
+  PYTHONPATH=common/src:biodiversity/src python -m mlops.prep_src.prep
+  --raw_data_gbif_path ${{inputs.raw_data_gbif_path}}
+  --raw_data_species_path ${{inputs.raw_data_species_path}}
+  --species_file_name ${{inputs.species_filename}}
+  --columns_to_drop ${{inputs.columns_to_drop}}
+  --drop_nans ${{inputs.drop_nans}}
+  --target_col_name ${{inputs.target_col_name}}
+  --correlation_id ${{inputs.correlation_id}}
+  --prep_data_path ${{outputs.prep_data_path}}

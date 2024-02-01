@@ -1,0 +1,26 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: score_model
+version: 1
+display_name: ScoreModel
+type: command
+inputs:
+  scoring_data_path:
+    type: uri_folder
+  best_parameters_path:
+    type: uri_folder
+  correlation_id:
+    type: string
+outputs:
+  scores_path:
+    type: uri_folder
+environment: azureml:AzureML-sklearn-0.24-ubuntu18.04-py37-cpu@latest
+code: ./../../../
+command: >-
+  PYTHONPATH=common/src:biodiversity/src python -m biodiversity.src.mlops.score_src.score
+  --scoring_data_path ${{inputs.scoring_data_path}}
+  --best_parameters_path ${{inputs.best_parameters_path}}
+  --correlation_id ${{inputs.correlation_id}}
+  --scores_path ${{outputs.scores_path}}

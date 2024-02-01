@@ -1,0 +1,10 @@
+{
+    "ignorePatterns": [
+        {
+            "pattern": "^https://dev.azure.com"
+        },
+        {
+            "pattern": "^#"
+        }
+    ]
+}

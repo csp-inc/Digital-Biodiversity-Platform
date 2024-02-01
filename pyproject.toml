@@ -1,0 +1,28 @@
+[tool.black]
+line-length = 92
+target-version = ['py38']
+include = '\.pyi?$'
+exclude = '''
+
+(
+  /(
+      \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+  )/
+  | foo.py           # also separately exclude a file named foo.py in
+                     # the root of the project
+)
+'''
+
+# The pyright steps have been removed until we can get them
+# working locally with external packages.
+[tool.pyright]
+exclude=["products/biodiversity/tests","products/biodiversity/dataprep/tests","products/common/tests"]

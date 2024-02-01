@@ -1,0 +1,42 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineJob.schema.json
+type: pipeline
+
+description: Candidate species pipeline
+
+display_name: candidate-species-pipeline
+experiment_name: candidate-species-pipeline
+
+settings:
+  default_compute: azureml:clu-data-preparation-8fpz
+
+jobs:
+  candidate_species:
+    type: command
+
+    # Inputs
+    inputs:
+      gbif:
+        type: uri_file
+        path: azureml://datastores/datablobstore/paths/cherrypt/training/gbif/gbif_subsampled.csv
+      candidate_species_list:
+        type: uri_file
+        path: azureml://datastores/datablobstore/paths/cherrypt/configuration/candidate_species_list.csv
+
+    # Outputs
+    outputs:
+      species_gbif_output:
+        type: uri_folder
+        path: azureml://datastores/datablobstore/paths/cherrypt/training/species
+
+    # The code path is relative to the location of this YAML file; it points to the `products` directory
+    code: ../../..
+
+    # The image/Conda environment to use
+    environment: azureml:preparation@latest
+
+    # The command to execute
+    command: >-
+      PYTHONPATH=common/src:biodiversity/src python biodiversity/dataprep/src/candidate_species_gbif.py --key_vault_name ${{inputs.keyvault_name}} --gbif_vertebrates_file_path ${{inputs.gbif}} --candidate_species_list_path ${{inputs.candidate_species_list}} --csv_output_directory ${{outputs.species_gbif_output}}

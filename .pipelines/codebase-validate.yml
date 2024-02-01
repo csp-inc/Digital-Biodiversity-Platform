@@ -1,0 +1,50 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.8'
+
+- script: |
+    pip install detect-secrets
+    pip install pyahocorasick
+    curl -sSfL https://git.io/getwoke | bash -s -- -b /usr/local/bin
+  displayName: 'install requirements'
+
+- script: |
+    detect-secrets --version
+    detect-secrets scan --all-files --force-use-all-plugins --word-list .secrets.word-list --exclude-files './products/biodiversity/dataprep/tests/test_data/*.csv' FETCH_HEAD './products/biodiversity/inference/tests/data/*.csv' > $(Pipeline.Workspace)/detect-secrets.json
+  displayName: "Run detect-secrets tool"
+
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: "$(Pipeline.Workspace)/detect-secrets.json"
+    artifact: "detect-secrets-ubuntu"
+    publishLocation: "pipeline"
+  displayName: "Publish detect-secrets results"
+
+- script: |
+    dsjson=$(cat $(Pipeline.Workspace)/detect-secrets.json)
+    echo "${dsjson}"
+
+    count=$(echo "${dsjson}" | jq -c -r '.results | length')
+
+    if [ $count -gt 0 ]; then
+      msg="Secrets were detected in code. ${count} file(s) affected."
+      echo "##vso[task.logissue type=error]${msg}"
+      echo "##vso[task.complete result=Failed;]${msg}."
+    else
+      echo "##vso[task.complete result=Succeeded;]No secrets detected."
+    fi
+  displayName: "Analyzing detect-secrets results"
+
+- script: |
+    # Lint all files with woke.
+    woke --config $(Build.SourcesDirectory)/woke.yml --exit-1-on-failure
+  displayName: 'run woke'

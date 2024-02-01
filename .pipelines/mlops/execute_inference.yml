@@ -1,0 +1,97 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+trigger: none
+
+variables:
+  - group: EBIO-STATE-VG
+  - group: MLOPS-CORE-VG
+  - group: EBIO-PLATFORM-DEV-VG
+
+pool:
+  vmImage: ubuntu-latest
+
+parameters:
+  - name: cherry_pt_segments
+    displayName: "Cherry Points Segments File"
+    default: "azureml://datastores/datablobstore/paths/cherrypt/configuration/cherry_pt_segments_60m_60m_2013_2021.csv"
+  - name: gold_table_path
+    displayName: "Gold Data Table File"
+    default: "azureml:cherrypt-inference-features:1"
+  - name: site_name
+    displayName: "Site Name"
+    default: "cherrypt"
+  - name: species_list_csv
+    displayName: "Species List CSV File"
+    default: "azureml://datastores/datablobstore/paths/cherrypt/configuration/candidate_species.csv"
+  - name: max_wait_time
+    displayName: "Maximum wait time for single job"
+    default: 3600
+  - name: inference_results
+    displayName: "Inference Results base path"
+    default: "azureml://datastores/datablobstore/paths/cherrypt/results"
+  - name: table_name
+    displayName: "SQL table to store results"
+    default: "dbo.temp_results"
+
+steps:
+  - task: UsePythonVersion@0
+    displayName: "install python 3.8"
+    continueOnError: false
+    inputs:
+      versionSpec: "3.8"
+
+  - script: |
+      pip install -r $(Build.SourcesDirectory)/.devcontainer/requirements.txt
+      pip install -r $(Build.SourcesDirectory)/products/common/requirements.txt
+      pip install -r $(Build.SourcesDirectory)/products/biodiversity/requirements.txt
+    displayName: Install requirements
+
+  - task: AzureCLI@2
+    displayName: Install and configure AML CLI v2
+    inputs:
+      azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      workingDirectory: $(System.DefaultWorkingDirectory)
+      inlineScript: |
+        set -e # fail on error
+        az version
+        az extension add -n ml -y
+        az extension list
+        az configure --defaults group=$(core_resource_group_name) workspace=$(core_machine_learning_workspace_name)
+
+  - template: templates/create_environment.yml
+  - task: AzureCLI@2
+    displayName: Execute Azure ML pipeline job
+    continueOnError: false
+    inputs:
+      azureSubscription: $(AZURE_RM_SVC_CONNECTION)
+      scriptType: bash
+      workingDirectory: $(System.DefaultWorkingDirectory)
+      scriptLocation: inlineScript
+      inlineScript: |
+        az ml job create --file products/biodiversity/inference/azureml/inference.yml \
+          --resource-group $(core_resource_group_name) \
+          --workspace-name $(core_machine_learning_workspace_name) \
+          --set settings.default_compute='azureml:$(core_ml_compute_cluster_data_preparation_name)' \
+          --set jobs.mergedata.inputs.cherry_pt_segments.path=${{ parameters.cherry_pt_segments }} \
+          --set jobs.mergedata.inputs.cherry_pt_segments.mode=ro_mount \
+          --set jobs.mergedata.inputs.cherry_pt_segments.type=uri_file \
+          --set jobs.mergedata.inputs.gold_table_path.path=${{ parameters.gold_table_path }} \
+          --set jobs.mergedata.inputs.gold_table_path.mode=ro_mount \
+          --set jobs.mergedata.inputs.gold_table_path.type=uri_file \
+          --set jobs.mergedata.inputs.key_vault_name=$(core_key_vault_name) \
+          --set jobs.inference.inputs.site_name=${{ parameters.site_name }} \
+          --set jobs.inference.inputs.species_list_csv.path=${{ parameters.species_list_csv }} \
+          --set jobs.inference.inputs.species_list_csv.mode=ro_mount \
+          --set jobs.inference.inputs.species_list_csv.type=uri_file \
+          --set jobs.inference.inputs.max_wait_time=3600 \
+          --set jobs.inference.inputs.subscription_id=$(core_subscription_id) \
+          --set jobs.inference.inputs.resource_group=$(core_resource_group_name) \
+          --set jobs.inference.inputs.uid=$(core_platform_uid) \
+          --set jobs.inference.inputs.workspace=$(core_machine_learning_workspace_name) \
+          --set jobs.inference.inputs.key_vault_name=$(core_key_vault_name) \
+          --set jobs.inference.outputs.inference_results.path="${{ parameters.inference_results }}/$(Build.BuildNumber)_hab_suitability_all_species_proba.csv" \
+          --set jobs.inference.outputs.inference_results.mode=rw_mount \
+          --set jobs.inference.outputs.inference_results.type=uri_file
