@@ -56,6 +56,27 @@ Here is the process to register a new data asset:
 
     ![Data Assets](./assets/data-assets.png)
 
+## Update MLOPS-CORE-VG
+
+Execute the following script to get REGISTER_PIPELINE_ID and REGISTER_PIPELINE_REVISION.
+
+```bash
+DEVOPS_ORGANIZATION="http://dev.azure.com/YOUR_ORGANIZATION"
+DEVOPS_PROJECT="YOUR_PROJECT"
+REGISTER_PIPELINE_NAME="[MLOps] Register Models"
+
+az devops configure --defaults organization="${DEVOPS_ORGANIZATION}" project="${DEVOPS_PROJECT}"
+az devops configure --list
+
+register_pipeline_id=$(az pipelines show --name "${REGISTER_PIPELINE_NAME}" --query id --output tsv)
+register_pipeline_revision=$(az pipelines show --name "${REGISTER_PIPELINE_NAME}" --query revision --output tsv)
+
+echo "REGISTER_PIPELINE_ID: ${register_pipeline_id}"
+echo "REGISTER_PIPELINE_REVISION: ${register_pipeline_revision}"
+```
+
+Copy and Paste these values in `MLOPS-CORE-VG` variable group.
+
 ## Run Pipelines
 
 For execution of data preparation pipelines, you can run them in the following order.
