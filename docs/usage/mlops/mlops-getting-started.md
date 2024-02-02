@@ -33,28 +33,28 @@ Here is the process to register a new data asset:
 2. Select `Create` button.
 3. Name the asset `cherrypt-training-features` and select `File (uri_file)` type. Be careful with this type for futures assets, it's not always the same.
 
-![Create Data Asset Step 1](./assets/data-asset-step-1.png)
+    ![Create Data Asset Step 1](./assets/data-asset-step-1.png)
 
 4. Select `Next` button.
 5. Choose `From a URI` option.
 
-![Create Data Asset Step 2](./assets/data-asset-step-2.png)
+    ![Create Data Asset Step 2](./assets/data-asset-step-2.png)
 
 6. Select `Next` button.
 7. Copy `azureml://datastores/datablobstore/paths/cherrypt/training/features_gold_data_table_20230201.csv` in the URI text box.
 
-![Create Data Asset Step 3](./assets/data-asset-step-3.png)
+    ![Create Data Asset Step 3](./assets/data-asset-step-3.png)
 
 8. Review and Create the asset.
 9. Repeat the same steps to have the following assets created.
 
-| Name | Type | URI |
-|------|------|-----|
-| cherrypt-training-features | File (uri_file) | azureml://datastores/datablobstore/paths/cherrypt/training/features_gold_data_table_20230201.csv |
-|cherrypt-training-species | Folder (uri_folder) | azureml://datastores/datablobstore/paths/cherrypt/training/species_20230201/ |
-|cherrypt-inference-features | File (uri_file) | azureml://datastores/datablobstore/paths/cherrypt/inference/cherry_pt_gold_20230201.csv |
+    | Name | Type | URI |
+    |------|------|-----|
+    | cherrypt-training-features | File (uri_file) | azureml://datastores/datablobstore/paths/cherrypt/training/features_gold_data_table_20230201.csv |
+    |cherrypt-training-species | Folder (uri_folder) | azureml://datastores/datablobstore/paths/cherrypt/training/species_20230201/ |
+    |cherrypt-inference-features | File (uri_file) | azureml://datastores/datablobstore/paths/cherrypt/inference/cherry_pt_gold_20230201.csv |
 
-![Data Assets](./assets/data-assets.png)
+    ![Data Assets](./assets/data-assets.png)
 
 ## Run Pipelines
 
@@ -62,23 +62,23 @@ For execution of data preparation pipelines, you can run them in the following o
 
 1. [MLOps] Build Validation
 
-To ensure the quality of code changes, it is recommended to trigger this pipeline using the [Build Validation](https://learn.microsoft.com/en-us/azure/devops/repos/git/branch-policies?view=azure-devops&tabs=browser#build-validation) branch policy. By setting this policy, any pull request changes must pass the build process before the pull request can be completed.
+    To ensure the quality of code changes, it is recommended to trigger this pipeline using the [Build Validation](https://learn.microsoft.com/en-us/azure/devops/repos/git/branch-policies?view=azure-devops&tabs=browser#build-validation) branch policy. By setting this policy, any pull request changes must pass the build process before the pull request can be completed.
 
 2. [MLOps] Train Models
 
-In order to check the status of the pipeline you will have to check the execution of the pipeline in AzureML. The pipeline name will be displayed as `{site_name}-{deployment_environment}-{build_id}`. The **Build ID** is reported in the **Execute Azure ML pipeline job** as a message. In this stage the errors from `prep.py`, `train.py`, `score.py` and `train_to_deploy.py` will be reported, if any. You can check them by looking at the **Outputs + Logs** tab for each stage. In this tab all the outputs from that stage will be provided as well. For some stages, such as **TrainLGBM** and **ScoreModel** metrics are provided in the **Metrics** tab.
+    In order to check the status of the pipeline you will have to check the execution of the pipeline in AzureML. The pipeline name will be displayed as `{site_name}-{deployment_environment}-{build_id}`. The **Build ID** is reported in the **Execute Azure ML pipeline job** as a message. In this stage the errors from `prep.py`, `train.py`, `score.py` and `train_to_deploy.py` will be reported, if any. You can check them by looking at the **Outputs + Logs** tab for each stage. In this tab all the outputs from that stage will be provided as well. For some stages, such as **TrainLGBM** and **ScoreModel** metrics are provided in the **Metrics** tab.
 
-![Logs](./assets//outputs-logs.png)
+    ![Logs](./assets//outputs-logs.png)
 
-The pipeline has multiple jobs, each one for a species. The name of the job will indicate for which species the respective job is. Once all the pipelines finish executing the callbacks are triggered for each model. The most common reason why callbacks might fail is that the personal access token for the pipeline is incorrect or expired. This PAT is retrieved from the **KeyVault**. You need to make sure there is a valid PAT in KeyVault and that the PAT has not expired.
+    The pipeline has multiple jobs, each one for a species. The name of the job will indicate for which species the respective job is. Once all the pipelines finish executing the callbacks are triggered for each model. The most common reason why callbacks might fail is that the personal access token for the pipeline is incorrect or expired. This PAT is retrieved from the **KeyVault**. You need to make sure there is a valid PAT in KeyVault and that the PAT has not expired.
 
-`[MLOps] Register Models` pipeline will be invoked automatically at the end of the training. You have a manual validation step to accept or reject the model (for each species) before to register it.
+    `[MLOps] Register Models` pipeline will be invoked automatically at the end of the training. You have a manual validation step to accept or reject the model (for each species) before to register it.
 
-![Approval](./assets/mlops-approvalreq.png)
+    ![Approval](./assets/mlops-approvalreq.png)
 
 3. [MLOps] Inference
 
-Inference results are stored in `azureml://datastores/datablobstore/paths/cherrypt/results`.
+    Inference results are stored in `azureml://datastores/datablobstore/paths/cherrypt/results`.
 
 > During the first execution of the each pipeline, it is necessary to grant permission access to variable groups. Please ensure that you check the pipeline run and grant the required access.
 
